@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>Bingo 遊戲 - 電腦端 (Host)</title>
+    <!-- 引入 QRCode 生成庫 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h2, h3 { margin-top: 5px; color: #2c3e50; }
+        .card {
+            background: #ffffff;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            width: 420px;
+            text-align: center;
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+        }
+        button {
+            background-color: #27ae60;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 0;
+            width: 100%;
+            transition: background-color 0.2s;
+        }
+        button:hover { background-color: #219653; }
+        
+        .mode-select {
+            display: flex;
+            justify-content: space-around;
+            margin: 15px 0;
+        }
+        .mode-btn {
+            background: #ffffff;
+            border: 2px solid #bdc3c7;
+            color: #555;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            flex: 1;
+            margin: 0 4px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .mode-btn.selected {
+            background: #e67e22;
+            border-color: #d35400;
+            color: white;
+        }
+
+        #qrcode {
+            display: flex;
+            justify-content: center;
+            margin: 15px 0;
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+            border: 1px solid #ddd;
+        }
+        .list-box {
+            background: #fdfefe;
+            border: 1px solid #d5dbdb;
+            border-radius: 6px;
+            padding: 10px;
+            min-height: 70px;
+            max-height: 110px;
+            overflow-y: auto;
+            text-align: left;
+            margin-top: 8px;
+        }
+        .list-item {
+            padding: 6px 10px;
+            margin: 4px 0;
+            background: #eaeded;
+            border-radius: 4px;
+            color: #333;
+            font-size: 14px;
+        }
+        .winner-item {
+            background: #d4efdf !important;
+            color: #196f3d !important;
+            font-weight: bold;
+        }
+        
+        .game-main-layout {
+            display: none;
+            gap: 20px;
+            max-width: 900px;
+            width: 100%;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 15px;
+        }
+        .host-cell {
+            background-color: #ffffff;
+            border: 2px solid #bdc3c7;
+            border-radius: 6px;
+            height: 75px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+            padding: 4px;
+            text-align: center;
+            color: #333;
+        }
+        .host-cell:hover {
+            background-color: #fcf3cf;
+            border-color: #f1c40f;
+        }
+        .host-cell.selected {
+            background-color: #e67e22 !important;
+            border-color: #d35400 !important;
+            color: white !important;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-card {
+            background: #ffffff;
+            padding: 25px;
+            border-radius: 10px;
+            width: 350px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin: 15px 0;
+        }
+        .preview-cell {
+            background: #f2f4f4;
+            border: 1px solid #bdc3c7;
+            height: 50px;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            padding: 2px;
+            text-align: center;
+            color: #7f8c8d;
+        }
+        .preview-cell.active {
+            background: #f39c12 !important;
+            color: white;
+            font-weight: bold;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn-valid { background-color: #27ae60; flex: 1; }
+        .btn-valid:hover { background-color: #219653; }
+        .btn-invalid { background-color: #e74c3c; flex: 1; }
+        .btn-invalid:hover { background-color: #c0392b; }
+    </style>
+</head>
+<body>
+
+    <div class="card" id="setupCard">
+        <h2>🎮 建立 Bingo 遊戲</h2>
+        <p style="color: #666; font-size: 14px;">請選擇遊戲勝利條件：</p>
+        <div class="mode-select">
+            <div class="mode-btn selected" id="btnMode1" onclick="setMode('1')">一條線</div>
+            <div class="mode-btn" id="btnMode2" onclick="setMode('2')">兩條線</div>
+            <div class="mode-btn" id="btnModeX" onclick="setMode('x')">X 型交叉</div>
+        </div>
+
+        <p style="color: #555;">隨機房間代碼：<strong id="displayRoomCode" style="color: #e74c3c; font-size: 22px;">---</strong></p>
+        <p style="color: #555;">請掃描下方 QR Code 加入遊戲：</p>
+        <div id="qrcode"></div>
+
+        <hr style="border-color: #e0e0e0; margin: 15px 0;">
+
+        <h3 style="text-align: left; font-size: 15px;">已加入的玩家：</h3>
+        <div class="list-box" id="playerListSetup">
+            <div style="color: #95a5a6; text-align: center; padding-top: 20px;">尚無玩家加入</div>
+        </div>
+        
+        <button onclick="goToGameView()">🚀 開始遊戲</button>
+    </div>
+
+    <div class="game-main-layout" id="gameMainContainer">
+        <div class="card" style="text-align: left;">
+            <h2 style="text-align: center;">主持人控制台</h2>
+            
+            <div style="margin-top: 10px; padding: 15px; background: #e8f8f5; border: 1px solid #a3e4d7; border-radius: 6px;">
+                <strong style="font-size: 14px; color: #117a65;">📌 目前發布目標：</strong><br>
+                <span id="activeTargetDisplay" style="font-size: 18px; font-weight: bold; color: #0e6251; display: block; margin-top: 5px;">尚未發布任何目標</span>
+            </div>
+
+            <hr style="border-color: #e0e0e0; margin: 15px 0;">
+
+            <h3 style="font-size: 15px;">已加入的玩家：</h3>
+            <div class="list-box" id="playerListGame">
+                <div style="color: #95a5a6; text-align: center; padding-top: 20px;">尚無玩家加入</div>
+            </div>
+
+            <h3 style="color: #b7950b; font-size: 15px; margin-top: 15px;">🏆 BINGO 得獎排行榜：</h3>
+            <div class="list-box" id="winnerList">
+                <div style="color: #95a5a6; text-align: center; padding-top: 20px;">尚無人 BINGO</div>
+            </div>
+        </div>
+
+        <div class="card" style="text-align: left;">
+            <h2 style="text-align: center;">點擊格子發布目標</h2>
+            <p style="font-size: 13px; color: #666; text-align: center;">點擊下方任一格子，即可立即傳送該目標給所有玩家！</p>
+            
+            <div class="grid" id="hostGrid"></div>
+
+            <div style="margin-top: 20px; font-size: 13px; color: #555; background: #f8f9f9; padding: 12px; border-radius: 6px; border: 1px solid #e5e7e9;">
+                房間代碼：<span id="runningRoomCode" style="color: #e74c3c; font-weight: bold;"></span><br>
+                勝利模式：<span id="runningModeText" style="color: #27ae60; font-weight: bold;"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="auditModal">
+        <div class="modal-card">
+            <h3 style="color: #d68910; margin-bottom: 5px;">🔔 玩家申請 BINGO 審核</h3>
+            <p style="font-size: 20px; font-weight: bold; margin: 10px 0; color: #333;" id="auditPlayerName">玩家暱稱</p>
+            <div style="font-size: 13px; color: #666;">玩家目前的九宮格畫面：</div>
+            
+            <div class="preview-grid" id="auditPreviewGrid"></div>
+
+            <div class="modal-buttons">
+                <button class="btn-valid" onclick="resolveBingo(true)">✅ 有效的勝利</button>
+                <button class="btn-invalid" onclick="resolveBingo(false)">❌ 無效的勝利</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let qrcodeObj = null;
+        let roomCode = '';
+        let selectedMode = '1';
+        let currentAuditPlayer = null;
+
+        const defaultCells = [
+            "一起玩波浪舞", "拍手 10 下", "大喊我愛大家",
+            "擺出超帥姿勢", "對隔壁微笑", "原地轉三圈",
+            "模仿動物叫聲", "跟主持人擊掌", "說一個冷笑話"
+        ];
+
+        function generateRoomCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let code = '';
+            for (let i = 0; i < 5; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return code;
+        }
+
+        window.onload = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const step = urlParams.get('step');
+            roomCode = urlParams.get('room') || generateRoomCode();
+
+            if (step === 'game') {
+                showGameMainView(false);
+            } else {
+                window.history.replaceState({}, '', `?room=${roomCode}`);
+                document.getElementById('displayRoomCode').innerText = roomCode;
+                initQRCode();
+            }
+
+            initHostGrid();
+            setInterval(updateGameStatus, 1000);
+        };
+
+        function setMode(mode) {
+            selectedMode = mode;
+            document.getElementById('btnMode1').className = 'mode-btn' + (mode === '1' ? ' selected' : '');
+            document.getElementById('btnMode2').className = 'mode-btn' + (mode === '2' ? ' selected' : '');
+            document.getElementById('btnModeX').className = 'mode-btn' + (mode === 'x' ? ' selected' : '');
+        }
+
+        function initQRCode() {
+            const qrContainer = document.getElementById('qrcode');
+            qrContainer.innerHTML = '';
+            let hostPath = window.location.pathname;
+            let playerPath = hostPath.substring(0, hostPath.lastIndexOf('/') + 1) + 'player.html';
+            let playerUrl = window.location.origin + playerPath + '?room=' + roomCode;
+            
+            qrcodeObj = new QRCode(qrContainer, {
+                text: playerUrl,
+                width: 120,
+                height: 120,
+            });
+        }
+
+        function initHostGrid() {
+            const gridEl = document.getElementById('hostGrid');
+            gridEl.innerHTML = '';
+
+            defaultCells.forEach((text) => {
+                const cell = document.createElement('div');
+                cell.className = 'host-cell';
+                cell.innerText = text;
+                
+                cell.onclick = () => {
+                    document.querySelectorAll('.host-cell').forEach(c => c.classList.remove('selected'));
+                    cell.classList.add('selected');
+
+                    localStorage.setItem(`bingo_target_${roomCode}`, text);
+                    document.getElementById('activeTargetDisplay').innerText = text;
+                };
+                gridEl.appendChild(cell);
+            });
+        }
+
+        function goToGameView() {
+            localStorage.setItem(`bingo_mode_${roomCode}`, selectedMode);
+            localStorage.setItem(`bingo_started_${roomCode}`, 'true');
+
+            let currentPath = window.location.pathname;
+            window.location.href = `${currentPath}?room=${roomCode}&step=game`;
+        }
+
+        function showGameMainView(changeUrl = true) {
+            if (changeUrl) {
+                let currentPath = window.location.pathname;
+                window.history.pushState({}, '', `${currentPath}?room=${roomCode}&step=game`);
+            }
+
+            document.getElementById('setupCard').style.display = 'none';
+            document.getElementById('gameMainContainer').style.display = 'flex';
+            document.getElementById('runningRoomCode').innerText = roomCode;
+
+            const currentMode = localStorage.getItem(`bingo_mode_${roomCode}`) || '1';
+            let modeText = '連線 1 條線';
+            if (currentMode === '2') modeText = '連線 2 條線';
+            if (currentMode === 'x') modeText = 'X 型交叉連線';
+            document.getElementById('runningModeText').innerText = modeText;
+            
+            const savedTarget = localStorage.getItem(`bingo_target_${roomCode}`);
+            if (savedTarget) {
+                document.getElementById('activeTargetDisplay').innerText = savedTarget;
+            }
+        }
+
+        function updateGameStatus() {
+            if (!roomCode) return;
+            
+            const players = JSON.parse(localStorage.getItem(`bingo_players_${roomCode}`)) || [];
+            ['playerListSetup', 'playerListGame'].forEach(id => {
+                const listEl = document.getElementById(id);
+                if (!listEl) return;
+                if (players.length === 0) {
+                    listEl.innerHTML = '<div style="color: #95a5a6; text-align: center; padding-top: 20px;">尚無玩家加入</div>';
+                } else {
+                    listEl.innerHTML = '';
+                    players.forEach(name => {
+                        const item = document.createElement('div');
+                        item.className = 'list-item';
+                        item.innerText = `👤 ${name}`;
+                        listEl.appendChild(item);
+                    });
+                }
+            });
+
+            const winners = JSON.parse(localStorage.getItem(`bingo_winners_${roomCode}`)) || [];
+            const winnerListEl = document.getElementById('winnerList');
+            if (winners.length === 0) {
+                winnerListEl.innerHTML = '<div style="color: #95a5a6; text-align: center; padding-top: 20px;">尚無人 BINGO</div>';
+            } else {
+                winnerListEl.innerHTML = '';
+                winners.forEach((name, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'list-item winner-item';
+                    item.innerText = `👑 第 ${index + 1} 名：${name}`;
+                    winnerListEl.appendChild(item);
+                });
+            }
+
+            const pendingQueue = JSON.parse(localStorage.getItem(`bingo_pending_${roomCode}`)) || [];
+            const modal = document.getElementById('auditModal');
+            
+            if (pendingQueue.length > 0 && modal.style.display !== 'flex' && !currentAuditPlayer) {
+                currentAuditPlayer = pendingQueue[0];
+                showAuditModal(currentAuditPlayer);
+            }
+        }
+
+        function showAuditModal(playerName) {
+            document.getElementById('auditPlayerName').innerText = playerName;
+            const previewGrid = document.getElementById('auditPreviewGrid');
+            previewGrid.innerHTML = '';
+
+            let savedState = localStorage.getItem(`bingo_state_${roomCode}_${playerName}`);
+            let cellStates = savedState ? JSON.parse(savedState) : Array(9).fill(false);
+
+            defaultCells.forEach((text, index) => {
+                const cell = document.createElement('div');
+                cell.className = 'preview-cell';
+                if (cellStates[index]) cell.classList.add('active');
+                cell.innerText = text;
+                previewGrid.appendChild(cell);
+            });
+
+            document.getElementById('auditModal').style.display = 'flex';
+        }
+
+        function resolveBingo(isValid) {
+            let pendingQueue = JSON.parse(localStorage.getItem(`bingo_pending_${roomCode}`)) || [];
+            
+            if (isValid) {
+                let winners = JSON.parse(localStorage.getItem(`bingo_winners_${roomCode}`)) || [];
+                if (!winners.includes(currentAuditPlayer)) {
+                    winners.push(currentAuditPlayer);
+                    localStorage.setItem(`bingo_winners_${roomCode}`, JSON.stringify(winners));
+                }
+                localStorage.setItem(`bingo_result_${roomCode}_${currentAuditPlayer}`, 'approved');
+            } else {
+                localStorage.setItem(`bingo_result_${roomCode}_${currentAuditPlayer}`, 'rejected');
+            }
+
+            pendingQueue = pendingQueue.filter(name => name !== currentAuditPlayer);
+            localStorage.setItem(`bingo_pending_${roomCode}`, JSON.stringify(pendingQueue));
+
+            document.getElementById('auditModal').style.display = 'none';
+            currentAuditPlayer = null;
+        }
+    </script>
+</body>
+</html>
